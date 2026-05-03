@@ -630,7 +630,7 @@ export interface CreateContentResourceParams {
  *
  * @example
  * ```ts
- * import { GenClient } from "@poweredbygen/autocontentengine-sdk";
+ * import { GenClient } from "@poweredbygen/gen-sdk";
  *
  * const client = new GenClient({ apiKey: "ref_your_token_here" });
  * const me = await client.getMe();

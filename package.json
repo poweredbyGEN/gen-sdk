@@ -1,8 +1,12 @@
 {
-  "name": "@poweredbygen/autocontentengine-sdk",
+  "name": "@poweredbygen/gen-sdk",
   "version": "0.5.0",
   "description": "TypeScript SDK for the GEN Auto Content Engine API",
   "type": "module",
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/poweredbyGEN/autocontentengine-sdk.git"
+  },
   "main": "./dist/index.js",
   "types": "./dist/index.d.ts",
   "exports": {

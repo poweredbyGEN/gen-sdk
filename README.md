@@ -1,4 +1,4 @@
-# @poweredbygen/autocontentengine-sdk
+# gen-sdk
 
 TypeScript SDK for the GEN Auto Content Engine API.
 
@@ -13,7 +13,7 @@ The SDK is organized around the **5-step content creation journey**:
 ## Installation
 
 ```bash
-npm install @poweredbygen/autocontentengine-sdk
+npm install @poweredbygen/gen-sdk
 ```
 
 ## Two APIs: flat or journey-namespaced
@@ -21,7 +21,7 @@ npm install @poweredbygen/autocontentengine-sdk
 The SDK ships **both** a flat `GenClient` and a **journey-first namespace facade**. Pick whichever fits your code — they share the same instance.
 
 ```ts
-import { gen } from "@poweredbygen/autocontentengine-sdk";
+import { gen } from "@poweredbygen/gen-sdk";
 
 const { sdk, client } = gen({ apiKey: "ref_your_token_here" });
 
@@ -40,7 +40,7 @@ await client.generateIdeas(agentId, { numIdeas: 5 });
 Or construct them separately:
 
 ```ts
-import { GenClient, createSdk } from "@poweredbygen/autocontentengine-sdk";
+import { GenClient, createSdk } from "@poweredbygen/gen-sdk";
 
 const client = new GenClient({ apiKey: "ref_..." });
 const sdk = createSdk(client);
@@ -49,7 +49,7 @@ const sdk = createSdk(client);
 ## End-to-end: Step 1 to Step 5
 
 ```ts
-import { gen } from "@poweredbygen/autocontentengine-sdk";
+import { gen } from "@poweredbygen/gen-sdk";
 
 const { sdk } = gen({ apiKey: process.env.GEN_API_KEY! });
 
@@ -261,7 +261,7 @@ Pass canonical types to `generateContent`. The SDK resolves the backend job shap
 ## Error handling
 
 ```ts
-import { GenClient, GenApiError } from "@poweredbygen/autocontentengine-sdk";
+import { GenClient, GenApiError } from "@poweredbygen/gen-sdk";
 
 try {
   await client.getAgent("nonexistent");
