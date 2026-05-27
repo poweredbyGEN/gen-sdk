@@ -597,4 +597,169 @@ describe("GenClient", () => {
       );
     });
   });
+
+  describe("Step 3 (Monitoring): Watchlists (agent-core.gen.pro)", () => {
+    it("listWatchlists hits agent-core base URL", async () => {
+      const fetchFn = mockFetch(200, []);
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.listWatchlists("agent-1");
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent-core.gen.pro/v1/agents/agent-1/watchlists",
+        expect.objectContaining({ method: "GET" })
+      );
+    });
+
+    it("createWatchlist POSTs the body with sources", async () => {
+      const fetchFn = mockFetch(201, {
+        id: "wl1",
+        user_id: "11",
+        agent_id: "agent-1",
+        name: "crypto watch",
+        intent_active: true,
+        sources: [],
+      });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.createWatchlist("agent-1", {
+        name: "crypto watch",
+        sources: [
+          { platform: "tiktok", target_type: "keyword", target_value: "btc" },
+        ],
+      });
+      const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[0]).toBe(
+        "https://agent-core.gen.pro/v1/agents/agent-1/watchlists"
+      );
+      expect(JSON.parse(call[1].body)).toEqual({
+        name: "crypto watch",
+        sources: [
+          { platform: "tiktok", target_type: "keyword", target_value: "btc" },
+        ],
+      });
+    });
+
+    it("pauseWatchlist sends intent_active=false", async () => {
+      const fetchFn = mockFetch(200, {
+        id: "wl1",
+        user_id: "11",
+        agent_id: "agent-1",
+        name: "x",
+        intent_active: false,
+        sources: [],
+      });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.pauseWatchlist("agent-1", "wl1");
+      const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[1].method).toBe("PATCH");
+      expect(JSON.parse(call[1].body)).toEqual({ intent_active: false });
+    });
+
+    it("removeWatchlistSource by sourceId hits the id path", async () => {
+      const fetchFn = mockFetch(200, { ok: true, removed: true });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.removeWatchlistSource("agent-1", "wl1", { sourceId: "src9" });
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent-core.gen.pro/v1/agents/agent-1/watchlists/wl1/sources/src9",
+        expect.objectContaining({ method: "DELETE" })
+      );
+    });
+
+    it("removeWatchlistSource by key uses query string", async () => {
+      const fetchFn = mockFetch(200, { ok: true, removed: true });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.removeWatchlistSource("agent-1", "wl1", {
+        platform: "tiktok",
+        target_type: "keyword",
+        target_value: "btc",
+      });
+      const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[0]).toContain(
+        "/agents/agent-1/watchlists/wl1/sources?"
+      );
+      expect(call[0]).toContain("platform=tiktok");
+      expect(call[0]).toContain("target_type=keyword");
+      expect(call[0]).toContain("target_value=btc");
+    });
+
+    it("should use custom agentCoreBaseUrl when provided", async () => {
+      const fetchFn = mockFetch(200, []);
+      const client = new GenClient({
+        apiKey: "key",
+        agentCoreBaseUrl: "https://agent-core-staging.example.com/v1",
+        fetch: fetchFn,
+      });
+      await client.listWatchlists("agent-1");
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent-core-staging.example.com/v1/agents/agent-1/watchlists",
+        expect.any(Object)
+      );
+    });
+  });
+
+  describe("Step 3 (Monitoring): Recurring Jobs (agent.gen.pro)", () => {
+    it("listRecurringJobs hits agent.gen.pro", async () => {
+      const fetchFn = mockFetch(200, { recurring_jobs: [] });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      const res = await client.listRecurringJobs("agent-1");
+      expect(res).toEqual({ recurring_jobs: [] });
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent.gen.pro/v1/agents/agent-1/recurring-jobs",
+        expect.objectContaining({ method: "GET" })
+      );
+    });
+
+    it("createRecurringJob POSTs the full body", async () => {
+      const fetchFn = mockFetch(201, {
+        id: "j1",
+        user_id: 11,
+        agent_id: "agent-1",
+        name: "daily ideas",
+        job_type: "generate_content_ideas",
+        prompt: "Generate content ideas",
+        schedule: { cadence: "daily", timezone: "UTC", time_of_day: "09:00" },
+        delivery: { type: "chat_only" },
+        status: "active",
+        created_at: "2026-05-27T00:00:00Z",
+        updated_at: "2026-05-27T00:00:00Z",
+      });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.createRecurringJob("agent-1", {
+        job_type: "generate_content_ideas",
+        prompt: "Generate content ideas",
+        schedule: { cadence: "daily", timezone: "UTC", time_of_day: "09:00" },
+        delivery: { type: "chat_only" },
+      });
+      const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[0]).toBe(
+        "https://agent.gen.pro/v1/agents/agent-1/recurring-jobs"
+      );
+      expect(JSON.parse(call[1].body)).toEqual({
+        job_type: "generate_content_ideas",
+        prompt: "Generate content ideas",
+        schedule: { cadence: "daily", timezone: "UTC", time_of_day: "09:00" },
+        delivery: { type: "chat_only" },
+      });
+    });
+
+    it("pauseRecurringJob POSTs to /pause", async () => {
+      const fetchFn = mockFetch(200, {
+        id: "j1",
+        user_id: 11,
+        agent_id: "agent-1",
+        name: "x",
+        job_type: "generate_content_ideas",
+        prompt: "p",
+        schedule: { cadence: "daily", timezone: "UTC" },
+        delivery: { type: "chat_only" },
+        status: "paused",
+        created_at: "x",
+        updated_at: "x",
+      });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.pauseRecurringJob("agent-1", "j1");
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent.gen.pro/v1/agents/agent-1/recurring-jobs/j1/pause",
+        expect.objectContaining({ method: "POST" })
+      );
+    });
+  });
 });

@@ -8,8 +8,154 @@ export interface GenClientOptions {
   baseUrl?: string;
   /** Base URL for the Agent Chat API. Defaults to "https://agent.gen.pro/v1". */
   agentBaseUrl?: string;
+  /**
+   * Base URL for the Agent Core API (watchlists). Defaults to
+   * "https://agent-core.gen.pro/v1".
+   */
+  agentCoreBaseUrl?: string;
   /** Optional custom fetch implementation. Defaults to global fetch. */
   fetch?: typeof globalThis.fetch;
+}
+
+// ── Step 3 (Monitoring): Watchlists ─────────────────────────────────────────
+
+/** Source kind on a watchlist: an account handle, a hashtag, or a free-text keyword. */
+export type WatchlistTargetType = "account" | "hashtag" | "keyword";
+
+/** A single monitoring target inside a watchlist. */
+export interface WatchSourceInput {
+  /** Platform — e.g. "tiktok", "instagram", "youtube". */
+  platform: string;
+  /** Kind of source: account=@handle, hashtag=tag (no #), keyword=free text. */
+  target_type: WatchlistTargetType;
+  /** Handle, hashtag name, or keyword text. */
+  target_value: string;
+  /** Optional original display form (e.g. "#glassskin" or "@drunkelephant"). */
+  original_display_value?: string;
+}
+
+/** A persisted watchlist source row. */
+export interface WatchSource extends WatchSourceInput {
+  id: string;
+  watchlist_id: string;
+  agent_id: string;
+  intent_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** A persisted watchlist. */
+export interface Watchlist {
+  id: string;
+  user_id: string;
+  agent_id: string;
+  name: string;
+  intent_active: boolean;
+  project_id?: string | null;
+  rails_project_error?: string | null;
+  conversation_id?: string | null;
+  created_by_run_id?: string | null;
+  sources: WatchSource[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Body for {@link GenClient.createWatchlist}. */
+export interface CreateWatchlistParams {
+  /** Display name (1-200 chars). Idempotent: same name reuses existing. */
+  name: string;
+  /** Initial sources to monitor. Optional; can be added later. */
+  sources?: WatchSourceInput[];
+  /** Optional Rails project id to link the watchlist shell to. */
+  project_id?: string | number;
+  /** Optional chat conversation that triggered creation. */
+  conversation_id?: string;
+  /** Optional agent_run id that triggered creation. */
+  created_by_run_id?: string;
+}
+
+/** Body for {@link GenClient.updateWatchlist}. */
+export interface UpdateWatchlistParams {
+  name?: string;
+  project_id?: string | number;
+  rails_project_error?: string;
+}
+
+// ── Step 3 (Monitoring): Recurring Jobs ────────────────────────────────────
+
+/** How often a recurring job fires. */
+export type RecurringJobCadence = "daily" | "weekly" | "hourly";
+
+/** How a recurring job's results are delivered. */
+export type RecurringJobDeliveryType = "chat_only" | "email";
+
+/** Schedule for a recurring agent job. */
+export interface RecurringJobSchedule {
+  cadence: RecurringJobCadence;
+  /** IANA timezone (e.g. "UTC", "America/Los_Angeles"). */
+  timezone: string;
+  /** Local clock time "HH:MM" (24h). Required for daily/weekly cadences. */
+  time_of_day?: string;
+}
+
+/** Delivery configuration for recurring-job outputs. */
+export interface RecurringJobDelivery {
+  type: RecurringJobDeliveryType;
+}
+
+/** Job lifecycle status. */
+export type RecurringJobStatus = "active" | "paused" | "deleted";
+
+/** A persisted recurring job. */
+export interface RecurringJob {
+  id: string;
+  user_id: number;
+  agent_id: string;
+  name: string;
+  job_type: string;
+  prompt: string;
+  schedule: RecurringJobSchedule;
+  delivery: RecurringJobDelivery;
+  status: RecurringJobStatus;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Body for {@link GenClient.createRecurringJob}. */
+export interface CreateRecurringJobParams {
+  /** Optional display name. Defaults to first 80 chars of prompt. */
+  name?: string;
+  /** Job type — "generate_content_ideas" for the default content-ideas pipeline. */
+  job_type: string;
+  /** Natural-language prompt the agent runs each cycle. */
+  prompt: string;
+  schedule: RecurringJobSchedule;
+  delivery: RecurringJobDelivery;
+  /** ISO-8601 timestamp to schedule the first run. */
+  next_run_at?: string;
+}
+
+/** Body for {@link GenClient.updateRecurringJob}. */
+export interface UpdateRecurringJobParams {
+  name?: string;
+  prompt?: string;
+  schedule?: RecurringJobSchedule;
+  delivery?: RecurringJobDelivery;
+  next_run_at?: string;
+}
+
+/** Response from {@link GenClient.ensureDefaultRecurringJob}. */
+export interface EnsureDefaultRecurringJobResult {
+  recurring_jobs: RecurringJob[];
+  /** true if a new default job was created; false if an existing one was returned. */
+  created: boolean;
+}
+
+/** Wrapper returned by {@link GenClient.listRecurringJobs}. */
+export interface ListRecurringJobsResult {
+  recurring_jobs: RecurringJob[];
 }
 
 // ── Generation type resolver (canonical → Rails internal) ───────────────────
@@ -641,6 +787,7 @@ export class GenClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly agentBaseUrl: string;
+  private readonly agentCoreBaseUrl: string;
   private readonly _fetch: typeof globalThis.fetch;
 
   constructor(options: GenClientOptions) {
@@ -654,6 +801,9 @@ export class GenClient {
     );
     this.agentBaseUrl = (
       options.agentBaseUrl ?? "https://agent.gen.pro/v1"
+    ).replace(/\/$/, "");
+    this.agentCoreBaseUrl = (
+      options.agentCoreBaseUrl ?? "https://agent-core.gen.pro/v1"
     ).replace(/\/$/, "");
     this._fetch = options.fetch ?? globalThis.fetch;
   }
@@ -701,6 +851,46 @@ export class GenClient {
 
   private buildAgentQuery(agentId: string | number): string {
     return `?agent_id=${encodeURIComponent(String(agentId))}`;
+  }
+
+  private async agentCoreRequest<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const url = `${this.agentCoreBaseUrl}${path}`;
+    const headers: Record<string, string> = {
+      "X-API-Key": this.apiKey,
+      "Content-Type": "application/json",
+    };
+
+    const res = await this._fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    const text = await res.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+
+    if (!res.ok) {
+      const errObj = data as Record<string, string> | undefined;
+      const error =
+        (errObj && typeof errObj === "object" && errObj.error) ||
+        (errObj && typeof errObj === "object" && (errObj as Record<string, unknown>).detail as string) ||
+        `HTTP ${res.status}`;
+      const errorCode =
+        (errObj && typeof errObj === "object" && errObj.error_code) ||
+        "unknown_error";
+      throw new GenApiError(res.status, error, errorCode);
+    }
+
+    return data as T;
   }
 
   private async agentRequest<T>(
@@ -2252,6 +2442,262 @@ export class GenClient {
     return this.agentRequest<ResearchResult>("POST", "/research", body);
   }
 
+  // ── Watchlists (Step 3 — Monitoring, agent-core.gen.pro) ────────────────
+
+  /**
+   * List all active watchlists for an agent. Soft-deleted watchlists are
+   * filtered out. Phase: Step 3 (Monitoring).
+   */
+  async listWatchlists(agentId: string): Promise<Watchlist[]> {
+    return this.agentCoreRequest<Watchlist[]>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/watchlists`
+    );
+  }
+
+  /**
+   * Create a new watchlist, optionally with initial sources. Idempotent on
+   * watchlist `name` (case-insensitive): if a watchlist with the same name
+   * already exists for this agent, the provided sources are merged into it
+   * instead of creating a duplicate. Phase: Step 3 (Monitoring).
+   */
+  async createWatchlist(
+    agentId: string,
+    params: CreateWatchlistParams
+  ): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/watchlists`,
+      params
+    );
+  }
+
+  /**
+   * Fetch a single watchlist with its full active sources list. Returns 404
+   * if the watchlist is soft-deleted. Phase: Step 3 (Monitoring).
+   */
+  async getWatchlist(agentId: string, watchlistId: string): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`
+    );
+  }
+
+  /**
+   * Update a watchlist's mutable fields (name, project_id,
+   * rails_project_error). Use {@link pauseWatchlist} /
+   * {@link resumeWatchlist} for status changes. Phase: Step 3 (Monitoring).
+   */
+  async updateWatchlist(
+    agentId: string,
+    watchlistId: string,
+    params: UpdateWatchlistParams
+  ): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`,
+      params
+    );
+  }
+
+  /**
+   * Pause a watchlist without deleting it. Sets `intent_active=false` so the
+   * scheduler stops queueing scrapes, but the watchlist and its sources are
+   * preserved. Phase: Step 3 (Monitoring).
+   */
+  async pauseWatchlist(agentId: string, watchlistId: string): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`,
+      { intent_active: false }
+    );
+  }
+
+  /**
+   * Resume a paused watchlist. Sets `intent_active=true`. Phase: Step 3
+   * (Monitoring).
+   */
+  async resumeWatchlist(agentId: string, watchlistId: string): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`,
+      { intent_active: true }
+    );
+  }
+
+  /**
+   * Soft-delete a watchlist. Marks the watchlist and all its sources inactive
+   * and deleted. Use {@link pauseWatchlist} for temporary stops. Phase:
+   * Step 3 (Monitoring).
+   */
+  async deleteWatchlist(
+    agentId: string,
+    watchlistId: string
+  ): Promise<{ ok: boolean; deleted: boolean }> {
+    return this.agentCoreRequest<{ ok: boolean; deleted: boolean }>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`
+    );
+  }
+
+  /**
+   * Add a monitoring source to an existing watchlist (or restore a previously
+   * removed source). Idempotent on (platform, target_type, target_value).
+   * `target_type` ∈ "account" | "hashtag" | "keyword". Phase: Step 3
+   * (Monitoring).
+   */
+  async addWatchlistSource(
+    agentId: string,
+    watchlistId: string,
+    source: WatchSourceInput
+  ): Promise<WatchSource> {
+    return this.agentCoreRequest<WatchSource>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources`,
+      source
+    );
+  }
+
+  /**
+   * Remove a source from a watchlist. Pass EITHER `sourceId` (preferred) OR
+   * all three of platform / target_type / target_value to remove by key.
+   * Soft-delete. Phase: Step 3 (Monitoring).
+   */
+  async removeWatchlistSource(
+    agentId: string,
+    watchlistId: string,
+    by: { sourceId: string } | {
+      platform: string;
+      target_type: WatchlistTargetType;
+      target_value: string;
+    }
+  ): Promise<{ ok: boolean; removed: boolean }> {
+    if ("sourceId" in by) {
+      return this.agentCoreRequest<{ ok: boolean; removed: boolean }>(
+        "DELETE",
+        `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources/${encodeURIComponent(by.sourceId)}`
+      );
+    }
+    const query = new URLSearchParams({
+      platform: by.platform,
+      target_type: by.target_type,
+      target_value: by.target_value,
+    }).toString();
+    return this.agentCoreRequest<{ ok: boolean; removed: boolean }>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources?${query}`
+    );
+  }
+
+  // ── Recurring Jobs / "Daily Tasks" (Step 3, agent.gen.pro) ──────────────
+
+  /**
+   * List all non-deleted recurring jobs for an agent. Returns active and
+   * paused jobs sorted newest first. Phase: Step 3 (Monitoring).
+   */
+  async listRecurringJobs(agentId: string): Promise<ListRecurringJobsResult> {
+    return this.agentRequest<ListRecurringJobsResult>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs`
+    );
+  }
+
+  /**
+   * Create a recurring agent job. `job_type=generate_content_ideas` is the
+   * standard default. Each scheduled run is credit-gated: the job remains
+   * configured if credits run out and resumes when they return. Phase:
+   * Step 3 (Monitoring).
+   */
+  async createRecurringJob(
+    agentId: string,
+    params: CreateRecurringJobParams
+  ): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs`,
+      params
+    );
+  }
+
+  /**
+   * Idempotently ensure the agent has the default daily content-ideas
+   * recurring job. Returns the existing one if present, otherwise creates
+   * a new one with the standard prompt, daily cadence at 09:00 UTC, and
+   * chat_only delivery. Inspect `created` to distinguish the two paths.
+   * Phase: Step 3 (Monitoring).
+   */
+  async ensureDefaultRecurringJob(
+    agentId: string
+  ): Promise<EnsureDefaultRecurringJobResult> {
+    return this.agentRequest<EnsureDefaultRecurringJobResult>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/defaults`
+    );
+  }
+
+  /**
+   * Fetch a single recurring job by id. Returns 404 if deleted. Phase:
+   * Step 3 (Monitoring).
+   */
+  async getRecurringJob(agentId: string, jobId: string): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}`
+    );
+  }
+
+  /**
+   * Update a recurring job's mutable fields. Use {@link pauseRecurringJob} /
+   * {@link resumeRecurringJob} for status transitions. Phase: Step 3
+   * (Monitoring).
+   */
+  async updateRecurringJob(
+    agentId: string,
+    jobId: string,
+    params: UpdateRecurringJobParams
+  ): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}`,
+      params
+    );
+  }
+
+  /**
+   * Pause a recurring job. status → "paused". The scheduler stops queueing
+   * runs until {@link resumeRecurringJob} is called. Phase: Step 3
+   * (Monitoring).
+   */
+  async pauseRecurringJob(agentId: string, jobId: string): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}/pause`
+    );
+  }
+
+  /**
+   * Resume a paused recurring job. status → "active". Phase: Step 3
+   * (Monitoring).
+   */
+  async resumeRecurringJob(agentId: string, jobId: string): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}/resume`
+    );
+  }
+
+  /**
+   * Soft-delete a recurring job. status → "deleted". Use
+   * {@link pauseRecurringJob} for temporary stops. Phase: Step 3
+   * (Monitoring).
+   */
+  async deleteRecurringJob(agentId: string, jobId: string): Promise<void> {
+    await this.agentRequest<unknown>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}`
+    );
+  }
+
   // ── Internal form-encoded request helper (for user_jobs endpoints) ────
 
   private async formRequest<T>(
@@ -2448,6 +2894,32 @@ export function createSdk(client: GenClient) {
       renderVideo: client.renderVideo.bind(client),
       publishContent: client.publishContent.bind(client),
       waitForGeneration: client.waitForGeneration.bind(client),
+    },
+
+    /**
+     * Step 3 — Monitoring: Watchlists (named groups of social-media targets)
+     * and Recurring Jobs (scheduled agent runs / "daily tasks").
+     */
+    monitoring: {
+      // Watchlists (agent-core.gen.pro)
+      listWatchlists: client.listWatchlists.bind(client),
+      createWatchlist: client.createWatchlist.bind(client),
+      getWatchlist: client.getWatchlist.bind(client),
+      updateWatchlist: client.updateWatchlist.bind(client),
+      pauseWatchlist: client.pauseWatchlist.bind(client),
+      resumeWatchlist: client.resumeWatchlist.bind(client),
+      deleteWatchlist: client.deleteWatchlist.bind(client),
+      addWatchlistSource: client.addWatchlistSource.bind(client),
+      removeWatchlistSource: client.removeWatchlistSource.bind(client),
+      // Recurring jobs / Daily tasks (agent.gen.pro)
+      listRecurringJobs: client.listRecurringJobs.bind(client),
+      createRecurringJob: client.createRecurringJob.bind(client),
+      ensureDefaultRecurringJob: client.ensureDefaultRecurringJob.bind(client),
+      getRecurringJob: client.getRecurringJob.bind(client),
+      updateRecurringJob: client.updateRecurringJob.bind(client),
+      pauseRecurringJob: client.pauseRecurringJob.bind(client),
+      resumeRecurringJob: client.resumeRecurringJob.bind(client),
+      deleteRecurringJob: client.deleteRecurringJob.bind(client),
     },
   };
 }
