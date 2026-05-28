@@ -75,6 +75,30 @@ export interface CreateWatchlistParams {
 }
 
 /** Body for {@link GenClient.updateWatchlist}. */
+/** Body for {@link GenClient.queryWatchlist}. */
+export interface QueryWatchlistParams {
+  /** What to ask — drives the analysis kind (top hooks / top videos / etc). */
+  question: string;
+  /** Time window in days, 1-365. Omit to let chat-side default apply. */
+  days?: number;
+  /** How many results, 1-1000. Omit to let chat-side default apply (100). */
+  limit?: number;
+  /** Sort key. Omit to let backend default ranking apply. */
+  sort_by?:
+    | "engagement_rate"
+    | "watch_count"
+    | "like_count"
+    | "comment_count"
+    | "share_count"
+    | "save_count"
+    | "posted_at"
+    | "trending_score";
+  /** Minimum engagement rate as a 0.0-1.0 fraction (0.05 == 5%). */
+  min_engagement_rate?: number;
+  /** Walk every matching row up to the DW hard cap of 1000. */
+  return_all?: boolean;
+}
+
 export interface UpdateWatchlistParams {
   name?: string;
   project_id?: string | number;
@@ -2589,6 +2613,55 @@ export class GenClient {
     );
   }
 
+  /**
+   * Ask a question about a watchlist with typed filters. Wraps the agent
+   * chat path that fans out one DW call per watchlist target with byte-
+   * identical filters (GEN-3420). Returns a run record you poll via
+   * {@link getRunStatus}. Phase: Step 3 (Monitoring).
+   *
+   * For programmatic 'top N from a watchlist by sort_by in last K days'
+   * style asks. Filter values are validated against the chat-side schema
+   * (days 1-365, limit 1-1000, sort_by from the QuerySpec enum); out-of-
+   * range values get a chat clarifier instead of silent fall-through.
+   */
+  async queryWatchlist(
+    agentId: string,
+    watchlistId: string,
+    params: QueryWatchlistParams
+  ): Promise<RunResponse> {
+    // Build a natural-language prompt the chat-side per-intent extractor
+    // (src/gen/intents/watchlist_analysis.py) parses deterministically.
+    const parts: string[] = [];
+    if (params.limit !== undefined) parts.push(`top ${params.limit}`);
+    parts.push(params.question);
+    parts.push(`from @list:${watchlistId}`);
+    if (params.sort_by !== undefined) {
+      const sortLabel: Record<string, string> = {
+        engagement_rate: "engagement rate",
+        watch_count: "views",
+        like_count: "likes",
+        comment_count: "comments",
+        share_count: "shares",
+        save_count: "saves",
+        posted_at: "newest",
+        trending_score: "trending",
+      };
+      parts.push(`by ${sortLabel[params.sort_by]}`);
+    }
+    if (params.days !== undefined) parts.push(`in the last ${params.days} days`);
+    if (params.min_engagement_rate !== undefined) {
+      parts.push(
+        `with engagement rate above ${(params.min_engagement_rate * 100).toFixed(1)}%`
+      );
+    }
+    if (params.return_all) parts.push("all");
+
+    return this.agentRequest<RunResponse>("POST", "/agent/run", {
+      message: parts.join(" "),
+      agent_id: agentId,
+    });
+  }
+
   // ── Recurring Jobs / "Daily Tasks" (Step 3, agent.gen.pro) ──────────────
 
   /**
@@ -2911,6 +2984,7 @@ export function createSdk(client: GenClient) {
       deleteWatchlist: client.deleteWatchlist.bind(client),
       addWatchlistSource: client.addWatchlistSource.bind(client),
       removeWatchlistSource: client.removeWatchlistSource.bind(client),
+      queryWatchlist: client.queryWatchlist.bind(client),
       // Recurring jobs / Daily tasks (agent.gen.pro)
       listRecurringJobs: client.listRecurringJobs.bind(client),
       createRecurringJob: client.createRecurringJob.bind(client),
