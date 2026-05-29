@@ -2661,7 +2661,7 @@ export class GenClient {
         `with engagement rate above ${(params.min_engagement_rate * 100).toFixed(1)}%`
       );
     }
-    if (params.return_all) parts.push("all");
+    if (params.return_all) parts.push("all results");
 
     return this.agentRequest<RunResponse>("POST", "/agent/run", {
       message: parts.join(" "),
