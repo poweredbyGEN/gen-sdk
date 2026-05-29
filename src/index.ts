@@ -1120,7 +1120,7 @@ export class GenClient {
   ): Promise<Engine> {
     return this.request<Engine>(
       "POST",
-      `/autocontentengine${this.buildAgentQuery(agentId)}`,
+      `/vidsheet${this.buildAgentQuery(agentId)}`,
       { spreadsheet: { title } }
     );
   }
@@ -1137,7 +1137,7 @@ export class GenClient {
   ): Promise<Engine> {
     return this.request<Engine>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1158,7 +1158,7 @@ export class GenClient {
       body.target_agent_id = targetAgentId;
     return this.request<Engine>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/clone${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/clone${this.buildAgentQuery(agentId)}`,
       body
     );
   }
@@ -1177,7 +1177,7 @@ export class GenClient {
   ): Promise<Row[]> {
     return this.request<Row[]>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1193,7 +1193,7 @@ export class GenClient {
   ): Promise<Row> {
     return this.request<Row>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`,
       {}
     );
   }
@@ -1212,7 +1212,7 @@ export class GenClient {
   ): Promise<Row> {
     return this.request<Row>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/rows/${encodeURIComponent(String(rowId))}/duplicate${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/rows/${encodeURIComponent(String(rowId))}/duplicate${this.buildAgentQuery(agentId)}`,
       {}
     );
   }
@@ -1231,7 +1231,7 @@ export class GenClient {
   ): Promise<Column[]> {
     return this.request<Column[]>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1249,7 +1249,7 @@ export class GenClient {
   ): Promise<Column> {
     return this.request<Column>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`,
       { spreadsheet_column: params }
     );
   }
@@ -1270,7 +1270,7 @@ export class GenClient {
   ): Promise<Cell> {
     return this.request<Cell>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1290,7 +1290,7 @@ export class GenClient {
   ): Promise<Cell> {
     return this.request<Cell>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`,
       { spreadsheet_cell: { value } }
     );
   }
@@ -1313,7 +1313,7 @@ export class GenClient {
   ): Promise<Layer> {
     return this.request<Layer>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers${this.buildAgentQuery(agentId)}`,
       { video_layer: params }
     );
   }
@@ -1333,7 +1333,7 @@ export class GenClient {
   ): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1364,7 +1364,7 @@ export class GenClient {
     if (data) body.data = data;
     return this.request<GenerationResult>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/generate${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/generate${this.buildAgentQuery(agentId)}`,
       body
     );
   }
@@ -1385,7 +1385,7 @@ export class GenClient {
   ): Promise<GenerationResult> {
     return this.request<GenerationResult>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}/generate${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}/generate${this.buildAgentQuery(agentId)}`,
       {}
     );
   }
@@ -2005,7 +2005,7 @@ export class GenClient {
   ): Promise<Column> {
     return this.request<Column>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}`,
       { agent_id: agentId, spreadsheet_column: params }
     );
   }
@@ -2021,7 +2021,7 @@ export class GenClient {
   ): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -2039,7 +2039,7 @@ export class GenClient {
   ): Promise<Layer> {
     return this.request<Layer>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -2061,7 +2061,7 @@ export class GenClient {
   ): Promise<Layer> {
     return this.request<Layer>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}`,
       { agent_id: agentId, video_layer: params }
     );
   }
@@ -2093,7 +2093,7 @@ export class GenClient {
   ): Promise<GenerationResult> {
     return this.request<GenerationResult>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/render`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/render`,
       { agent_id: agentId }
     );
   }
@@ -2292,7 +2292,7 @@ export class GenClient {
   ): Promise<GlobalVariable[]> {
     return this.request<GlobalVariable[]>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -2306,7 +2306,7 @@ export class GenClient {
   ): Promise<GlobalVariable> {
     return this.request<GlobalVariable>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`,
       { global_variable: params }
     );
   }
@@ -2323,7 +2323,7 @@ export class GenClient {
   ): Promise<GlobalVariable> {
     return this.request<GlobalVariable>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`,
       { global_variable: params }
     );
   }
@@ -2339,7 +2339,7 @@ export class GenClient {
   ): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
