@@ -1647,6 +1647,16 @@ export class GenClient {
   }
 
   /**
+   * Expand a single content idea into a full project_manifest (the structured
+   * layer/scene plan a vidsheet is built from). Idempotent — returns the cached
+   * manifest if already expanded. Note the path has no /agent/ segment.
+   * Phase: Step 2 (Generate Content Ideas).
+   */
+  async expandIdea(ideaId: string | number): Promise<unknown> {
+    return this.agentRequest<unknown>("POST", `/ideas/${ideaId}/expand`);
+  }
+
+  /**
    * List agent chat conversations.
    */
   async listConversations(agentId?: string): Promise<Conversation[]> {
@@ -1662,6 +1672,34 @@ export class GenClient {
     return this.agentRequest<Conversation>(
       "GET",
       `/agent/conversations/${conversationId}`
+    );
+  }
+
+  /**
+   * Read per-conversation session preferences (temporary creative rules scoped
+   * to this one conversation, distinct from the agent's long-term preferences).
+   * Phase: Step 2.
+   */
+  async getSessionPreferences(conversationId: string): Promise<{ preferences: string | null }> {
+    return this.agentRequest<{ preferences: string | null }>(
+      "GET",
+      `/agent/conversations/${conversationId}/session-preferences`
+    );
+  }
+
+  /**
+   * Set per-conversation session preferences (applied only within this
+   * conversation; does not change the agent's saved long-term preferences).
+   * Phase: Step 2.
+   */
+  async updateSessionPreferences(
+    conversationId: string,
+    preferences: string
+  ): Promise<{ preferences: string | null }> {
+    return this.agentRequest<{ preferences: string | null }>(
+      "PATCH",
+      `/agent/conversations/${conversationId}/session-preferences`,
+      { preferences }
     );
   }
 
@@ -2202,20 +2240,41 @@ export class GenClient {
    * Create a new Personal Access Token. The plain-text token is returned
    * ONCE — store it securely. Phase: Step 1 (Set Up Your Agent).
    */
-  async createApiKey(name?: string): Promise<CreateApiKeyResult> {
+  async createApiKey(name?: string, expiresIn?: number): Promise<CreateApiKeyResult> {
     const body: Record<string, unknown> = {};
     if (name) body.name = name;
+    if (expiresIn !== undefined) body.expires_in = expiresIn;
     return this.request<CreateApiKeyResult>("POST", "/persisted_tokens", body);
   }
 
   /**
-   * Revoke (delete) a Personal Access Token. Phase: Step 1.
+   * Rename an existing Personal Access Token. Only the display name can change;
+   * the token value is immutable. Phase: Step 1.
+   */
+  async updateApiKey(tokenId: string | number, name: string): Promise<ApiKey> {
+    return this.request<ApiKey>(
+      "PATCH",
+      `/persisted_tokens/${encodeURIComponent(String(tokenId))}`,
+      { persisted_token: { name } }
+    );
+  }
+
+  /**
+   * Revoke (delete) a single Personal Access Token. Phase: Step 1.
    */
   async revokeApiKey(tokenId: string | number): Promise<void> {
     await this.request<unknown>(
       "DELETE",
       `/persisted_tokens/${encodeURIComponent(String(tokenId))}/revoke`
     );
+  }
+
+  /**
+   * Revoke ALL of the user's Personal Access Tokens at once. Irreversible —
+   * every existing key stops working immediately. Phase: Step 1.
+   */
+  async revokeAllApiKeys(): Promise<void> {
+    await this.request<unknown>("DELETE", "/persisted_tokens/revoke_all");
   }
 
   // ── Asset Libraries (Step 1 / Step 4) ─────────────────────────────────
@@ -2893,7 +2952,9 @@ export function createSdk(client: GenClient) {
       // API keys
       listApiKeys: client.listApiKeys.bind(client),
       createApiKey: client.createApiKey.bind(client),
+      updateApiKey: client.updateApiKey.bind(client),
       revokeApiKey: client.revokeApiKey.bind(client),
+      revokeAllApiKeys: client.revokeAllApiKeys.bind(client),
     },
 
     /** Step 2 — Generate Content Ideas: research, ideas, refine, preferences. */
@@ -2908,8 +2969,11 @@ export function createSdk(client: GenClient) {
       rejectRun: client.rejectRun.bind(client),
       listIdeas: client.listIdeas.bind(client),
       updateIdeaStatus: client.updateIdeaStatus.bind(client),
+      expandIdea: client.expandIdea.bind(client),
       listConversations: client.listConversations.bind(client),
       getConversation: client.getConversation.bind(client),
+      getSessionPreferences: client.getSessionPreferences.bind(client),
+      updateSessionPreferences: client.updateSessionPreferences.bind(client),
       deleteConversation: client.deleteConversation.bind(client),
       createMonitoringJob: client.createMonitoringJob.bind(client),
       updateMonitoringJob: client.updateMonitoringJob.bind(client),
