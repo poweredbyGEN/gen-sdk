@@ -108,7 +108,7 @@ export interface UpdateWatchlistParams {
 // ── Step 3 (Monitoring): Recurring Jobs ────────────────────────────────────
 
 /** How often a recurring job fires. */
-export type RecurringJobCadence = "daily" | "weekly" | "hourly";
+export type RecurringJobCadence = "daily" | "weekly";
 
 /** How a recurring job's results are delivered. */
 export type RecurringJobDeliveryType = "chat_only" | "email";
@@ -120,11 +120,18 @@ export interface RecurringJobSchedule {
   timezone: string;
   /** Local clock time "HH:MM" (24h). Required for daily/weekly cadences. */
   time_of_day?: string;
+  /**
+   * Days to run, 0=Mon … 6=Sun. REQUIRED when `cadence` is "weekly";
+   * must be omitted when "daily". No duplicates.
+   */
+  days_of_week?: number[];
 }
 
 /** Delivery configuration for recurring-job outputs. */
 export interface RecurringJobDelivery {
   type: RecurringJobDeliveryType;
+  /** Recipient email. REQUIRED when `type` is "email"; omit when "chat_only". */
+  email?: string;
 }
 
 /** Job lifecycle status. */
