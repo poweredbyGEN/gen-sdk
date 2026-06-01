@@ -8,8 +8,185 @@ export interface GenClientOptions {
   baseUrl?: string;
   /** Base URL for the Agent Chat API. Defaults to "https://agent.gen.pro/v1". */
   agentBaseUrl?: string;
+  /**
+   * Base URL for the Agent Core API (watchlists). Defaults to
+   * "https://agent-core.gen.pro/v1".
+   */
+  agentCoreBaseUrl?: string;
   /** Optional custom fetch implementation. Defaults to global fetch. */
   fetch?: typeof globalThis.fetch;
+}
+
+// ── Step 3 (Monitoring): Watchlists ─────────────────────────────────────────
+
+/** Source kind on a watchlist: an account handle, a hashtag, or a free-text keyword. */
+export type WatchlistTargetType = "account" | "hashtag" | "keyword";
+
+/** A single monitoring target inside a watchlist. */
+export interface WatchSourceInput {
+  /** Platform — e.g. "tiktok", "instagram", "youtube". */
+  platform: string;
+  /** Kind of source: account=@handle, hashtag=tag (no #), keyword=free text. */
+  target_type: WatchlistTargetType;
+  /** Handle, hashtag name, or keyword text. */
+  target_value: string;
+  /** Optional original display form (e.g. "#glassskin" or "@drunkelephant"). */
+  original_display_value?: string;
+}
+
+/** A persisted watchlist source row. */
+export interface WatchSource extends WatchSourceInput {
+  id: string;
+  watchlist_id: string;
+  agent_id: string;
+  intent_active: boolean;
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** A persisted watchlist. */
+export interface Watchlist {
+  id: string;
+  user_id: string;
+  agent_id: string;
+  name: string;
+  intent_active: boolean;
+  project_id?: string | null;
+  rails_project_error?: string | null;
+  conversation_id?: string | null;
+  created_by_run_id?: string | null;
+  sources: WatchSource[];
+  created_at?: string;
+  updated_at?: string;
+}
+
+/** Body for {@link GenClient.createWatchlist}. */
+export interface CreateWatchlistParams {
+  /** Display name (1-200 chars). Idempotent: same name reuses existing. */
+  name: string;
+  /** Initial sources to monitor. Optional; can be added later. */
+  sources?: WatchSourceInput[];
+  /** Optional Rails project id to link the watchlist shell to. */
+  project_id?: string | number;
+  /** Optional chat conversation that triggered creation. */
+  conversation_id?: string;
+  /** Optional agent_run id that triggered creation. */
+  created_by_run_id?: string;
+}
+
+/** Body for {@link GenClient.updateWatchlist}. */
+/** Body for {@link GenClient.queryWatchlist}. */
+export interface QueryWatchlistParams {
+  /** What to ask — drives the analysis kind (top hooks / top videos / etc). */
+  question: string;
+  /** Time window in days, 1-365. Omit to let chat-side default apply. */
+  days?: number;
+  /** How many results, 1-1000. Omit to let chat-side default apply (100). */
+  limit?: number;
+  /** Sort key. Omit to let backend default ranking apply. */
+  sort_by?:
+    | "engagement_rate"
+    | "watch_count"
+    | "like_count"
+    | "comment_count"
+    | "share_count"
+    | "save_count"
+    | "posted_at"
+    | "trending_score";
+  /** Minimum engagement rate as a 0.0-1.0 fraction (0.05 == 5%). */
+  min_engagement_rate?: number;
+  /** Walk every matching row up to the DW hard cap of 1000. */
+  return_all?: boolean;
+}
+
+export interface UpdateWatchlistParams {
+  name?: string;
+  project_id?: string | number;
+  rails_project_error?: string;
+}
+
+// ── Step 3 (Monitoring): Recurring Jobs ────────────────────────────────────
+
+/** How often a recurring job fires. */
+export type RecurringJobCadence = "daily" | "weekly";
+
+/** How a recurring job's results are delivered. */
+export type RecurringJobDeliveryType = "chat_only" | "email";
+
+/** Schedule for a recurring agent job. */
+export interface RecurringJobSchedule {
+  cadence: RecurringJobCadence;
+  /** IANA timezone (e.g. "UTC", "America/Los_Angeles"). */
+  timezone: string;
+  /** Local clock time "HH:MM" (24h). Required for daily/weekly cadences. */
+  time_of_day?: string;
+  /**
+   * Days to run, 0=Mon … 6=Sun. REQUIRED when `cadence` is "weekly";
+   * must be omitted when "daily". No duplicates.
+   */
+  days_of_week?: number[];
+}
+
+/** Delivery configuration for recurring-job outputs. */
+export interface RecurringJobDelivery {
+  type: RecurringJobDeliveryType;
+  /** Recipient email. REQUIRED when `type` is "email"; omit when "chat_only". */
+  email?: string;
+}
+
+/** Job lifecycle status. */
+export type RecurringJobStatus = "active" | "paused" | "deleted";
+
+/** A persisted recurring job. */
+export interface RecurringJob {
+  id: string;
+  user_id: number;
+  agent_id: string;
+  name: string;
+  job_type: string;
+  prompt: string;
+  schedule: RecurringJobSchedule;
+  delivery: RecurringJobDelivery;
+  status: RecurringJobStatus;
+  next_run_at?: string | null;
+  last_run_at?: string | null;
+  created_at: string;
+  updated_at: string;
+}
+
+/** Body for {@link GenClient.createRecurringJob}. */
+export interface CreateRecurringJobParams {
+  /** Optional display name. Defaults to first 80 chars of prompt. */
+  name?: string;
+  /** Job type — "generate_content_ideas" for the default content-ideas pipeline. */
+  job_type: string;
+  /** Natural-language prompt the agent runs each cycle. */
+  prompt: string;
+  schedule: RecurringJobSchedule;
+  delivery: RecurringJobDelivery;
+  /** ISO-8601 timestamp to schedule the first run. */
+  next_run_at?: string;
+}
+
+/** Body for {@link GenClient.updateRecurringJob}. */
+export interface UpdateRecurringJobParams {
+  name?: string;
+  prompt?: string;
+  schedule?: RecurringJobSchedule;
+  delivery?: RecurringJobDelivery;
+  next_run_at?: string;
+}
+
+/** Response from {@link GenClient.ensureDefaultRecurringJob}. */
+export interface EnsureDefaultRecurringJobResult {
+  recurring_jobs: RecurringJob[];
+  /** true if a new default job was created; false if an existing one was returned. */
+  created: boolean;
+}
+
+/** Wrapper returned by {@link GenClient.listRecurringJobs}. */
+export interface ListRecurringJobsResult {
+  recurring_jobs: RecurringJob[];
 }
 
 // ── Generation type resolver (canonical → Rails internal) ───────────────────
@@ -641,6 +818,7 @@ export class GenClient {
   private readonly apiKey: string;
   private readonly baseUrl: string;
   private readonly agentBaseUrl: string;
+  private readonly agentCoreBaseUrl: string;
   private readonly _fetch: typeof globalThis.fetch;
 
   constructor(options: GenClientOptions) {
@@ -654,6 +832,9 @@ export class GenClient {
     );
     this.agentBaseUrl = (
       options.agentBaseUrl ?? "https://agent.gen.pro/v1"
+    ).replace(/\/$/, "");
+    this.agentCoreBaseUrl = (
+      options.agentCoreBaseUrl ?? "https://agent-core.gen.pro/v1"
     ).replace(/\/$/, "");
     this._fetch = options.fetch ?? globalThis.fetch;
   }
@@ -701,6 +882,46 @@ export class GenClient {
 
   private buildAgentQuery(agentId: string | number): string {
     return `?agent_id=${encodeURIComponent(String(agentId))}`;
+  }
+
+  private async agentCoreRequest<T>(
+    method: string,
+    path: string,
+    body?: unknown
+  ): Promise<T> {
+    const url = `${this.agentCoreBaseUrl}${path}`;
+    const headers: Record<string, string> = {
+      "X-API-Key": this.apiKey,
+      "Content-Type": "application/json",
+    };
+
+    const res = await this._fetch(url, {
+      method,
+      headers,
+      body: body !== undefined ? JSON.stringify(body) : undefined,
+    });
+
+    const text = await res.text();
+    let data: unknown;
+    try {
+      data = JSON.parse(text);
+    } catch {
+      data = text;
+    }
+
+    if (!res.ok) {
+      const errObj = data as Record<string, string> | undefined;
+      const error =
+        (errObj && typeof errObj === "object" && errObj.error) ||
+        (errObj && typeof errObj === "object" && (errObj as Record<string, unknown>).detail as string) ||
+        `HTTP ${res.status}`;
+      const errorCode =
+        (errObj && typeof errObj === "object" && errObj.error_code) ||
+        "unknown_error";
+      throw new GenApiError(res.status, error, errorCode);
+    }
+
+    return data as T;
   }
 
   private async agentRequest<T>(
@@ -906,7 +1127,7 @@ export class GenClient {
   ): Promise<Engine> {
     return this.request<Engine>(
       "POST",
-      `/autocontentengine${this.buildAgentQuery(agentId)}`,
+      `/vidsheet${this.buildAgentQuery(agentId)}`,
       { spreadsheet: { title } }
     );
   }
@@ -923,7 +1144,7 @@ export class GenClient {
   ): Promise<Engine> {
     return this.request<Engine>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -944,7 +1165,7 @@ export class GenClient {
       body.target_agent_id = targetAgentId;
     return this.request<Engine>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/clone${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/clone${this.buildAgentQuery(agentId)}`,
       body
     );
   }
@@ -963,7 +1184,7 @@ export class GenClient {
   ): Promise<Row[]> {
     return this.request<Row[]>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -979,7 +1200,7 @@ export class GenClient {
   ): Promise<Row> {
     return this.request<Row>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/rows${this.buildAgentQuery(agentId)}`,
       {}
     );
   }
@@ -998,7 +1219,7 @@ export class GenClient {
   ): Promise<Row> {
     return this.request<Row>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/rows/${encodeURIComponent(String(rowId))}/duplicate${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/rows/${encodeURIComponent(String(rowId))}/duplicate${this.buildAgentQuery(agentId)}`,
       {}
     );
   }
@@ -1017,7 +1238,7 @@ export class GenClient {
   ): Promise<Column[]> {
     return this.request<Column[]>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1035,7 +1256,7 @@ export class GenClient {
   ): Promise<Column> {
     return this.request<Column>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns${this.buildAgentQuery(agentId)}`,
       { spreadsheet_column: params }
     );
   }
@@ -1056,7 +1277,7 @@ export class GenClient {
   ): Promise<Cell> {
     return this.request<Cell>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1076,7 +1297,7 @@ export class GenClient {
   ): Promise<Cell> {
     return this.request<Cell>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}${this.buildAgentQuery(agentId)}`,
       { spreadsheet_cell: { value } }
     );
   }
@@ -1099,7 +1320,7 @@ export class GenClient {
   ): Promise<Layer> {
     return this.request<Layer>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers${this.buildAgentQuery(agentId)}`,
       { video_layer: params }
     );
   }
@@ -1119,7 +1340,7 @@ export class GenClient {
   ): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1150,7 +1371,7 @@ export class GenClient {
     if (data) body.data = data;
     return this.request<GenerationResult>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/generate${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/generate${this.buildAgentQuery(agentId)}`,
       body
     );
   }
@@ -1171,7 +1392,7 @@ export class GenClient {
   ): Promise<GenerationResult> {
     return this.request<GenerationResult>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}/generate${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}/generate${this.buildAgentQuery(agentId)}`,
       {}
     );
   }
@@ -1426,6 +1647,16 @@ export class GenClient {
   }
 
   /**
+   * Expand a single content idea into a full project_manifest (the structured
+   * layer/scene plan a vidsheet is built from). Idempotent — returns the cached
+   * manifest if already expanded. Note the path has no /agent/ segment.
+   * Phase: Step 2 (Generate Content Ideas).
+   */
+  async expandIdea(ideaId: string | number): Promise<unknown> {
+    return this.agentRequest<unknown>("POST", `/ideas/${ideaId}/expand`);
+  }
+
+  /**
    * List agent chat conversations.
    */
   async listConversations(agentId?: string): Promise<Conversation[]> {
@@ -1441,6 +1672,34 @@ export class GenClient {
     return this.agentRequest<Conversation>(
       "GET",
       `/agent/conversations/${conversationId}`
+    );
+  }
+
+  /**
+   * Read per-conversation session preferences (temporary creative rules scoped
+   * to this one conversation, distinct from the agent's long-term preferences).
+   * Phase: Step 2.
+   */
+  async getSessionPreferences(conversationId: string): Promise<{ preferences: string | null }> {
+    return this.agentRequest<{ preferences: string | null }>(
+      "GET",
+      `/agent/conversations/${conversationId}/session-preferences`
+    );
+  }
+
+  /**
+   * Set per-conversation session preferences (applied only within this
+   * conversation; does not change the agent's saved long-term preferences).
+   * Phase: Step 2.
+   */
+  async updateSessionPreferences(
+    conversationId: string,
+    preferences: string
+  ): Promise<{ preferences: string | null }> {
+    return this.agentRequest<{ preferences: string | null }>(
+      "PATCH",
+      `/agent/conversations/${conversationId}/session-preferences`,
+      { preferences }
     );
   }
 
@@ -1791,7 +2050,7 @@ export class GenClient {
   ): Promise<Column> {
     return this.request<Column>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}`,
       { agent_id: agentId, spreadsheet_column: params }
     );
   }
@@ -1807,7 +2066,7 @@ export class GenClient {
   ): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/columns/${encodeURIComponent(String(columnId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1825,7 +2084,7 @@ export class GenClient {
   ): Promise<Layer> {
     return this.request<Layer>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -1847,7 +2106,7 @@ export class GenClient {
   ): Promise<Layer> {
     return this.request<Layer>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/layers/${encodeURIComponent(String(layerId))}`,
       { agent_id: agentId, video_layer: params }
     );
   }
@@ -1879,7 +2138,7 @@ export class GenClient {
   ): Promise<GenerationResult> {
     return this.request<GenerationResult>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/render`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/cells/${encodeURIComponent(String(cellId))}/render`,
       { agent_id: agentId }
     );
   }
@@ -1981,20 +2240,41 @@ export class GenClient {
    * Create a new Personal Access Token. The plain-text token is returned
    * ONCE — store it securely. Phase: Step 1 (Set Up Your Agent).
    */
-  async createApiKey(name?: string): Promise<CreateApiKeyResult> {
+  async createApiKey(name?: string, expiresIn?: number): Promise<CreateApiKeyResult> {
     const body: Record<string, unknown> = {};
     if (name) body.name = name;
+    if (expiresIn !== undefined) body.expires_in = expiresIn;
     return this.request<CreateApiKeyResult>("POST", "/persisted_tokens", body);
   }
 
   /**
-   * Revoke (delete) a Personal Access Token. Phase: Step 1.
+   * Rename an existing Personal Access Token. Only the display name can change;
+   * the token value is immutable. Phase: Step 1.
+   */
+  async updateApiKey(tokenId: string | number, name: string): Promise<ApiKey> {
+    return this.request<ApiKey>(
+      "PATCH",
+      `/persisted_tokens/${encodeURIComponent(String(tokenId))}`,
+      { persisted_token: { name } }
+    );
+  }
+
+  /**
+   * Revoke (delete) a single Personal Access Token. Phase: Step 1.
    */
   async revokeApiKey(tokenId: string | number): Promise<void> {
     await this.request<unknown>(
       "DELETE",
       `/persisted_tokens/${encodeURIComponent(String(tokenId))}/revoke`
     );
+  }
+
+  /**
+   * Revoke ALL of the user's Personal Access Tokens at once. Irreversible —
+   * every existing key stops working immediately. Phase: Step 1.
+   */
+  async revokeAllApiKeys(): Promise<void> {
+    await this.request<unknown>("DELETE", "/persisted_tokens/revoke_all");
   }
 
   // ── Asset Libraries (Step 1 / Step 4) ─────────────────────────────────
@@ -2078,7 +2358,7 @@ export class GenClient {
   ): Promise<GlobalVariable[]> {
     return this.request<GlobalVariable[]>(
       "GET",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -2092,7 +2372,7 @@ export class GenClient {
   ): Promise<GlobalVariable> {
     return this.request<GlobalVariable>(
       "POST",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables${this.buildAgentQuery(agentId)}`,
       { global_variable: params }
     );
   }
@@ -2109,7 +2389,7 @@ export class GenClient {
   ): Promise<GlobalVariable> {
     return this.request<GlobalVariable>(
       "PATCH",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`,
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`,
       { global_variable: params }
     );
   }
@@ -2125,7 +2405,7 @@ export class GenClient {
   ): Promise<void> {
     await this.request<unknown>(
       "DELETE",
-      `/autocontentengine/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`
+      `/vidsheet/${encodeURIComponent(String(engineId))}/global_variables/${encodeURIComponent(String(variableId))}${this.buildAgentQuery(agentId)}`
     );
   }
 
@@ -2252,6 +2532,311 @@ export class GenClient {
     return this.agentRequest<ResearchResult>("POST", "/research", body);
   }
 
+  // ── Watchlists (Step 3 — Monitoring, agent-core.gen.pro) ────────────────
+
+  /**
+   * List all active watchlists for an agent. Soft-deleted watchlists are
+   * filtered out. Phase: Step 3 (Monitoring).
+   */
+  async listWatchlists(agentId: string): Promise<Watchlist[]> {
+    return this.agentCoreRequest<Watchlist[]>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/watchlists`
+    );
+  }
+
+  /**
+   * Create a new watchlist, optionally with initial sources. Idempotent on
+   * watchlist `name` (case-insensitive): if a watchlist with the same name
+   * already exists for this agent, the provided sources are merged into it
+   * instead of creating a duplicate. Phase: Step 3 (Monitoring).
+   */
+  async createWatchlist(
+    agentId: string,
+    params: CreateWatchlistParams
+  ): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/watchlists`,
+      params
+    );
+  }
+
+  /**
+   * Fetch a single watchlist with its full active sources list. Returns 404
+   * if the watchlist is soft-deleted. Phase: Step 3 (Monitoring).
+   */
+  async getWatchlist(agentId: string, watchlistId: string): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`
+    );
+  }
+
+  /**
+   * Update a watchlist's mutable fields (name, project_id,
+   * rails_project_error). Use {@link pauseWatchlist} /
+   * {@link resumeWatchlist} for status changes. Phase: Step 3 (Monitoring).
+   */
+  async updateWatchlist(
+    agentId: string,
+    watchlistId: string,
+    params: UpdateWatchlistParams
+  ): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`,
+      params
+    );
+  }
+
+  /**
+   * Pause a watchlist without deleting it. Sets `intent_active=false` so the
+   * scheduler stops queueing scrapes, but the watchlist and its sources are
+   * preserved. Phase: Step 3 (Monitoring).
+   */
+  async pauseWatchlist(agentId: string, watchlistId: string): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`,
+      { intent_active: false }
+    );
+  }
+
+  /**
+   * Resume a paused watchlist. Sets `intent_active=true`. Phase: Step 3
+   * (Monitoring).
+   */
+  async resumeWatchlist(agentId: string, watchlistId: string): Promise<Watchlist> {
+    return this.agentCoreRequest<Watchlist>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`,
+      { intent_active: true }
+    );
+  }
+
+  /**
+   * Soft-delete a watchlist. Marks the watchlist and all its sources inactive
+   * and deleted. Use {@link pauseWatchlist} for temporary stops. Phase:
+   * Step 3 (Monitoring).
+   */
+  async deleteWatchlist(
+    agentId: string,
+    watchlistId: string
+  ): Promise<{ ok: boolean; deleted: boolean }> {
+    return this.agentCoreRequest<{ ok: boolean; deleted: boolean }>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}`
+    );
+  }
+
+  /**
+   * Add a monitoring source to an existing watchlist (or restore a previously
+   * removed source). Idempotent on (platform, target_type, target_value).
+   * `target_type` ∈ "account" | "hashtag" | "keyword". Phase: Step 3
+   * (Monitoring).
+   */
+  async addWatchlistSource(
+    agentId: string,
+    watchlistId: string,
+    source: WatchSourceInput
+  ): Promise<WatchSource> {
+    return this.agentCoreRequest<WatchSource>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources`,
+      source
+    );
+  }
+
+  /**
+   * Remove a source from a watchlist. Pass EITHER `sourceId` (preferred) OR
+   * all three of platform / target_type / target_value to remove by key.
+   * Soft-delete. Phase: Step 3 (Monitoring).
+   */
+  async removeWatchlistSource(
+    agentId: string,
+    watchlistId: string,
+    by: { sourceId: string } | {
+      platform: string;
+      target_type: WatchlistTargetType;
+      target_value: string;
+    }
+  ): Promise<{ ok: boolean; removed: boolean }> {
+    if ("sourceId" in by) {
+      return this.agentCoreRequest<{ ok: boolean; removed: boolean }>(
+        "DELETE",
+        `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources/${encodeURIComponent(by.sourceId)}`
+      );
+    }
+    const query = new URLSearchParams({
+      platform: by.platform,
+      target_type: by.target_type,
+      target_value: by.target_value,
+    }).toString();
+    return this.agentCoreRequest<{ ok: boolean; removed: boolean }>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources?${query}`
+    );
+  }
+
+  /**
+   * Ask a question about a watchlist with typed filters. Wraps the agent
+   * chat path that fans out one DW call per watchlist target with byte-
+   * identical filters (GEN-3420). Returns a run record you poll via
+   * {@link getRunStatus}. Phase: Step 3 (Monitoring).
+   *
+   * For programmatic 'top N from a watchlist by sort_by in last K days'
+   * style asks. Filter values are validated against the chat-side schema
+   * (days 1-365, limit 1-1000, sort_by from the QuerySpec enum); out-of-
+   * range values get a chat clarifier instead of silent fall-through.
+   */
+  async queryWatchlist(
+    agentId: string,
+    watchlistId: string,
+    params: QueryWatchlistParams
+  ): Promise<RunResponse> {
+    // Build a natural-language prompt the chat-side per-intent extractor
+    // (src/gen/intents/watchlist_analysis.py) parses deterministically.
+    const parts: string[] = [];
+    if (params.limit !== undefined) parts.push(`top ${params.limit}`);
+    parts.push(params.question);
+    parts.push(`from @list:${watchlistId}`);
+    if (params.sort_by !== undefined) {
+      const sortLabel: Record<string, string> = {
+        engagement_rate: "engagement rate",
+        watch_count: "views",
+        like_count: "likes",
+        comment_count: "comments",
+        share_count: "shares",
+        save_count: "saves",
+        posted_at: "newest",
+        trending_score: "trending",
+      };
+      parts.push(`by ${sortLabel[params.sort_by]}`);
+    }
+    if (params.days !== undefined) parts.push(`in the last ${params.days} days`);
+    if (params.min_engagement_rate !== undefined) {
+      parts.push(
+        `with engagement rate above ${(params.min_engagement_rate * 100).toFixed(1)}%`
+      );
+    }
+    if (params.return_all) parts.push("all results");
+
+    return this.agentRequest<RunResponse>("POST", "/agent/run", {
+      message: parts.join(" "),
+      agent_id: agentId,
+    });
+  }
+
+  // ── Recurring Jobs / "Daily Tasks" (Step 3, agent.gen.pro) ──────────────
+
+  /**
+   * List all non-deleted recurring jobs for an agent. Returns active and
+   * paused jobs sorted newest first. Phase: Step 3 (Monitoring).
+   */
+  async listRecurringJobs(agentId: string): Promise<ListRecurringJobsResult> {
+    return this.agentRequest<ListRecurringJobsResult>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs`
+    );
+  }
+
+  /**
+   * Create a recurring agent job. `job_type=generate_content_ideas` is the
+   * standard default. Each scheduled run is credit-gated: the job remains
+   * configured if credits run out and resumes when they return. Phase:
+   * Step 3 (Monitoring).
+   */
+  async createRecurringJob(
+    agentId: string,
+    params: CreateRecurringJobParams
+  ): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs`,
+      params
+    );
+  }
+
+  /**
+   * Idempotently ensure the agent has the default daily content-ideas
+   * recurring job. Returns the existing one if present, otherwise creates
+   * a new one with the standard prompt, daily cadence at 09:00 UTC, and
+   * chat_only delivery. Inspect `created` to distinguish the two paths.
+   * Phase: Step 3 (Monitoring).
+   */
+  async ensureDefaultRecurringJob(
+    agentId: string
+  ): Promise<EnsureDefaultRecurringJobResult> {
+    return this.agentRequest<EnsureDefaultRecurringJobResult>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/defaults`
+    );
+  }
+
+  /**
+   * Fetch a single recurring job by id. Returns 404 if deleted. Phase:
+   * Step 3 (Monitoring).
+   */
+  async getRecurringJob(agentId: string, jobId: string): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}`
+    );
+  }
+
+  /**
+   * Update a recurring job's mutable fields. Use {@link pauseRecurringJob} /
+   * {@link resumeRecurringJob} for status transitions. Phase: Step 3
+   * (Monitoring).
+   */
+  async updateRecurringJob(
+    agentId: string,
+    jobId: string,
+    params: UpdateRecurringJobParams
+  ): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "PATCH",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}`,
+      params
+    );
+  }
+
+  /**
+   * Pause a recurring job. status → "paused". The scheduler stops queueing
+   * runs until {@link resumeRecurringJob} is called. Phase: Step 3
+   * (Monitoring).
+   */
+  async pauseRecurringJob(agentId: string, jobId: string): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}/pause`
+    );
+  }
+
+  /**
+   * Resume a paused recurring job. status → "active". Phase: Step 3
+   * (Monitoring).
+   */
+  async resumeRecurringJob(agentId: string, jobId: string): Promise<RecurringJob> {
+    return this.agentRequest<RecurringJob>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}/resume`
+    );
+  }
+
+  /**
+   * Soft-delete a recurring job. status → "deleted". Use
+   * {@link pauseRecurringJob} for temporary stops. Phase: Step 3
+   * (Monitoring).
+   */
+  async deleteRecurringJob(agentId: string, jobId: string): Promise<void> {
+    await this.agentRequest<unknown>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/recurring-jobs/${encodeURIComponent(jobId)}`
+    );
+  }
+
   // ── Internal form-encoded request helper (for user_jobs endpoints) ────
 
   private async formRequest<T>(
@@ -2367,7 +2952,9 @@ export function createSdk(client: GenClient) {
       // API keys
       listApiKeys: client.listApiKeys.bind(client),
       createApiKey: client.createApiKey.bind(client),
+      updateApiKey: client.updateApiKey.bind(client),
       revokeApiKey: client.revokeApiKey.bind(client),
+      revokeAllApiKeys: client.revokeAllApiKeys.bind(client),
     },
 
     /** Step 2 — Generate Content Ideas: research, ideas, refine, preferences. */
@@ -2382,8 +2969,11 @@ export function createSdk(client: GenClient) {
       rejectRun: client.rejectRun.bind(client),
       listIdeas: client.listIdeas.bind(client),
       updateIdeaStatus: client.updateIdeaStatus.bind(client),
+      expandIdea: client.expandIdea.bind(client),
       listConversations: client.listConversations.bind(client),
       getConversation: client.getConversation.bind(client),
+      getSessionPreferences: client.getSessionPreferences.bind(client),
+      updateSessionPreferences: client.updateSessionPreferences.bind(client),
       deleteConversation: client.deleteConversation.bind(client),
       createMonitoringJob: client.createMonitoringJob.bind(client),
       updateMonitoringJob: client.updateMonitoringJob.bind(client),
@@ -2448,6 +3038,33 @@ export function createSdk(client: GenClient) {
       renderVideo: client.renderVideo.bind(client),
       publishContent: client.publishContent.bind(client),
       waitForGeneration: client.waitForGeneration.bind(client),
+    },
+
+    /**
+     * Step 3 — Monitoring: Watchlists (named groups of social-media targets)
+     * and Recurring Jobs (scheduled agent runs / "daily tasks").
+     */
+    monitoring: {
+      // Watchlists (agent-core.gen.pro)
+      listWatchlists: client.listWatchlists.bind(client),
+      createWatchlist: client.createWatchlist.bind(client),
+      getWatchlist: client.getWatchlist.bind(client),
+      updateWatchlist: client.updateWatchlist.bind(client),
+      pauseWatchlist: client.pauseWatchlist.bind(client),
+      resumeWatchlist: client.resumeWatchlist.bind(client),
+      deleteWatchlist: client.deleteWatchlist.bind(client),
+      addWatchlistSource: client.addWatchlistSource.bind(client),
+      removeWatchlistSource: client.removeWatchlistSource.bind(client),
+      queryWatchlist: client.queryWatchlist.bind(client),
+      // Recurring jobs / Daily tasks (agent.gen.pro)
+      listRecurringJobs: client.listRecurringJobs.bind(client),
+      createRecurringJob: client.createRecurringJob.bind(client),
+      ensureDefaultRecurringJob: client.ensureDefaultRecurringJob.bind(client),
+      getRecurringJob: client.getRecurringJob.bind(client),
+      updateRecurringJob: client.updateRecurringJob.bind(client),
+      pauseRecurringJob: client.pauseRecurringJob.bind(client),
+      resumeRecurringJob: client.resumeRecurringJob.bind(client),
+      deleteRecurringJob: client.deleteRecurringJob.bind(client),
     },
   };
 }
