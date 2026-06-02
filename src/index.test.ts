@@ -176,12 +176,12 @@ describe("GenClient", () => {
   });
 
   describe("engines", () => {
-    it("createEngine should POST /autocontentengine with agent_id query and title body", async () => {
+    it("createEngine should POST /vidsheet with agent_id query and title body", async () => {
       const fetchFn = mockFetch(200, { id: 1, title: "My Engine" });
       const client = new GenClient({ apiKey: "key", fetch: fetchFn });
       await client.createEngine("agent-1", "My Engine");
       expect(fetchFn).toHaveBeenCalledWith(
-        expect.stringContaining("/autocontentengine?agent_id=agent-1"),
+        expect.stringContaining("/vidsheet?agent_id=agent-1"),
         expect.objectContaining({
           method: "POST",
           body: JSON.stringify({ spreadsheet: { title: "My Engine" } }),
@@ -189,12 +189,12 @@ describe("GenClient", () => {
       );
     });
 
-    it("getEngine should GET /autocontentengine/:id with agent_id", async () => {
+    it("getEngine should GET /vidsheet/:id with agent_id", async () => {
       const fetchFn = mockFetch(200, { id: 5 });
       const client = new GenClient({ apiKey: "key", fetch: fetchFn });
       await client.getEngine("a1", "e5");
       expect(fetchFn).toHaveBeenCalledWith(
-        expect.stringContaining("/autocontentengine/e5?agent_id=a1"),
+        expect.stringContaining("/vidsheet/e5?agent_id=a1"),
         expect.objectContaining({ method: "GET" })
       );
     });
@@ -204,7 +204,7 @@ describe("GenClient", () => {
       const client = new GenClient({ apiKey: "key", fetch: fetchFn });
       await client.cloneEngine("a1", "e5", "a2");
       expect(fetchFn).toHaveBeenCalledWith(
-        expect.stringContaining("/autocontentengine/e5/clone?agent_id=a1"),
+        expect.stringContaining("/vidsheet/e5/clone?agent_id=a1"),
         expect.objectContaining({
           body: JSON.stringify({ target_agent_id: "a2" }),
         })
@@ -229,7 +229,7 @@ describe("GenClient", () => {
       expect(result.generation_id).toBe(99);
       expect(fetchFn).toHaveBeenCalledWith(
         expect.stringContaining(
-          "/autocontentengine/e1/cells/c1/generate?agent_id=a1"
+          "/vidsheet/e1/cells/c1/generate?agent_id=a1"
         ),
         expect.objectContaining({
           method: "POST",
@@ -355,7 +355,7 @@ describe("GenClient", () => {
       const client = new GenClient({ apiKey: "key", fetch: fetchFn });
       await client.updateCell("a1", "e1", "c1", "new value");
       expect(fetchFn).toHaveBeenCalledWith(
-        expect.stringContaining("/autocontentengine/e1/cells/c1?agent_id=a1"),
+        expect.stringContaining("/vidsheet/e1/cells/c1?agent_id=a1"),
         expect.objectContaining({
           method: "PATCH",
           body: JSON.stringify({ spreadsheet_cell: { value: "new value" } }),
@@ -375,7 +375,7 @@ describe("GenClient", () => {
       });
       expect(fetchFn).toHaveBeenCalledWith(
         expect.stringContaining(
-          "/autocontentengine/e1/cells/c1/layers?agent_id=a1"
+          "/vidsheet/e1/cells/c1/layers?agent_id=a1"
         ),
         expect.objectContaining({
           method: "POST",
@@ -392,7 +392,7 @@ describe("GenClient", () => {
       await client.deleteLayer("a1", "e1", "c1", "l1");
       expect(fetchFn).toHaveBeenCalledWith(
         expect.stringContaining(
-          "/autocontentengine/e1/cells/c1/layers/l1?agent_id=a1"
+          "/vidsheet/e1/cells/c1/layers/l1?agent_id=a1"
         ),
         expect.objectContaining({ method: "DELETE" })
       );
