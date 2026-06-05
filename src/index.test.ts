@@ -695,6 +695,89 @@ describe("GenClient", () => {
     });
   });
 
+  describe("Step 4 (Assets): Proof of Genesis (agent-core.gen.pro)", () => {
+    it("listProofOfGenesisBackups hits agent-core base URL", async () => {
+      const fetchFn = mockFetch(200, { backups: [] });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.listProofOfGenesisBackups("agent-1");
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent-core.gen.pro/v1/agents/agent-1/proof-of-genesis/backups",
+        expect.objectContaining({ method: "GET" })
+      );
+    });
+
+    it("listProofOfGenesisBackups can include removed rows", async () => {
+      const fetchFn = mockFetch(200, { backups: [] });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.listProofOfGenesisBackups("agent-1", { includeRemoved: true });
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent-core.gen.pro/v1/agents/agent-1/proof-of-genesis/backups?include_removed=true",
+        expect.objectContaining({ method: "GET" })
+      );
+    });
+
+    it("createProofOfGenesisBackup POSTs asset backup body", async () => {
+      const fetchFn = mockFetch(201, {
+        id: 101,
+        agent_id: "agent-1",
+        status: "synced",
+        source_event: "manual",
+        source_url: "https://assets.gen.pro/final.mp4",
+        asset_type: "video",
+        visibility: "public",
+        encrypted: false,
+        billing_operation: "backup_to_blockchain",
+        billing_outboxed: false,
+        created_at: "2026-06-05T16:00:00Z",
+      });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.createProofOfGenesisBackup("agent-1", {
+        asset_url: "https://assets.gen.pro/final.mp4",
+        asset_type: "video",
+        visibility: "public",
+        encrypted: false,
+        source_event: "manual",
+        idempotency_key: "content-resource-4821-v1",
+        metadata: { content_resource_id: 4821 },
+      });
+      const call = (fetchFn as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(call[0]).toBe(
+        "https://agent-core.gen.pro/v1/agents/agent-1/proof-of-genesis/backups"
+      );
+      expect(JSON.parse(call[1].body)).toEqual({
+        asset_url: "https://assets.gen.pro/final.mp4",
+        asset_type: "video",
+        visibility: "public",
+        encrypted: false,
+        source_event: "manual",
+        idempotency_key: "content-resource-4821-v1",
+        metadata: { content_resource_id: 4821 },
+      });
+    });
+
+    it("removeProofOfGenesisBackup soft-removes by id", async () => {
+      const fetchFn = mockFetch(200, {
+        id: 101,
+        agent_id: "agent-1",
+        status: "synced",
+        source_event: "manual",
+        source_url: "https://assets.gen.pro/final.mp4",
+        asset_type: "video",
+        visibility: "public",
+        billing_operation: "backup_to_blockchain",
+        billing_outboxed: false,
+        removed_at: "2026-06-05T17:00:00Z",
+        created_at: "2026-06-05T16:00:00Z",
+      });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.removeProofOfGenesisBackup("agent-1", 101);
+      expect(fetchFn).toHaveBeenCalledWith(
+        "https://agent-core.gen.pro/v1/agents/agent-1/proof-of-genesis/backups/101",
+        expect.objectContaining({ method: "DELETE" })
+      );
+    });
+  });
+
   describe("Step 3 (Monitoring): Recurring Jobs (agent.gen.pro)", () => {
     it("listRecurringJobs hits agent.gen.pro", async () => {
       const fetchFn = mockFetch(200, { recurring_jobs: [] });
