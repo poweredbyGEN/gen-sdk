@@ -127,6 +127,9 @@ export interface ProofOfGenesisBackup {
   encrypted: boolean;
   encryption_scheme?: string | null;
   encryption_key_id?: string | null;
+  owner_sui_address?: string | null;
+  custody_mode?: "gen_custody" | "customer_wallet" | string | null;
+  walrus_object_recipient_address?: string | null;
   content_sha256?: string | null;
   size_bytes?: number | null;
   content_type?: string | null;
@@ -168,6 +171,8 @@ export interface CreateProofOfGenesisBackupParams {
   encryption_scheme?: string;
   /** Optional key policy/version identifier for private proof metadata. */
   encryption_key_id?: string;
+  /** Customer Sui wallet address that should own the Walrus object. Auto-backup can resolve this from Dynamic. */
+  owner_sui_address?: string;
   /** Why this backup is being created. Defaults server-side to manual. */
   source_event?: ProofOfGenesisSourceEvent;
   /** MIME type if known, e.g. video/mp4 or image/png. */
@@ -2776,6 +2781,9 @@ export class GenClient {
    * automatic asset event. Auto-backup defaults to downloaded/published
    * assets. Public assets may be uploaded raw. Private assets must be
    * encrypted before upload because Walrus blobs are public by default.
+   * Pass owner_sui_address to transfer the Walrus object to a customer Sui
+   * wallet; automatic server-side backup can resolve the user's Dynamic Sui
+   * wallet when configured.
    * Storage is monthly by default and response rows include expiry/renewal
    * metadata.
    * Phase: Step 4 (Assets).
