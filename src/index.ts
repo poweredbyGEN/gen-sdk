@@ -105,6 +105,79 @@ export interface UpdateWatchlistParams {
   rails_project_error?: string;
 }
 
+// ── Step 4 (Assets): Proof of Genesis / Backup to Blockchain ──────────────
+
+export type ProofOfGenesisAssetType = "video" | "image";
+export type ProofOfGenesisVisibility = "private" | "public";
+export type ProofOfGenesisSourceEvent =
+  | "manual"
+  | "generated"
+  | "uploaded"
+  | "downloaded"
+  | "published";
+
+export interface ProofOfGenesisBackup {
+  id: number;
+  agent_id: string;
+  status: "uploading" | "synced" | "failed" | "billing_failed" | string;
+  source_event: ProofOfGenesisSourceEvent | string;
+  source_url: string;
+  asset_type: ProofOfGenesisAssetType | string;
+  visibility: ProofOfGenesisVisibility | string;
+  encrypted: boolean;
+  encryption_scheme?: string | null;
+  encryption_key_id?: string | null;
+  content_sha256?: string | null;
+  size_bytes?: number | null;
+  content_type?: string | null;
+  walrus_blob_id?: string | null;
+  walrus_blob_object_id?: string | null;
+  walrus_storage_id?: string | null;
+  walrus_start_epoch?: number | null;
+  walrus_end_epoch?: number | null;
+  walrus_encoded_length_bytes?: number | null;
+  walrus_cost_wal?: number | null;
+  verification_status?: "verified" | "skipped" | string | null;
+  billing_operation: string;
+  billing_charge_id?: number | null;
+  billing_amount_charged?: string | null;
+  billing_new_balance?: string | null;
+  billing_outboxed: boolean;
+  expires_at?: string | null;
+  renewal_due_at?: string | null;
+  renewal_status?: string | null;
+  renewal_attempts?: number | null;
+  last_renewed_at?: string | null;
+  failure_code?: string | null;
+  failure_message?: string | null;
+  removed_at?: string | null;
+  created_at: string;
+  completed_at?: string | null;
+}
+
+export interface CreateProofOfGenesisBackupParams {
+  /** GEN asset URL to back up. */
+  asset_url: string;
+  /** Asset type. Defaults server-side to video. */
+  asset_type?: ProofOfGenesisAssetType;
+  /** Private assets must be encrypted before upload; Walrus blobs are public by default. */
+  visibility?: ProofOfGenesisVisibility;
+  /** Whether the bytes at asset_url are already encrypted before Walrus upload. Required for private backups. */
+  encrypted?: boolean;
+  /** Required for private backups, e.g. seal/v1. */
+  encryption_scheme?: string;
+  /** Optional key policy/version identifier for private proof metadata. */
+  encryption_key_id?: string;
+  /** Why this backup is being created. Defaults server-side to manual. */
+  source_event?: ProofOfGenesisSourceEvent;
+  /** MIME type if known, e.g. video/mp4 or image/png. */
+  content_type?: string;
+  /** Stable retry key to avoid duplicate upload/billing. */
+  idempotency_key?: string;
+  /** Caller metadata such as content_resource_id, vidsheet_id, row_id, publish id. */
+  metadata?: Record<string, unknown>;
+}
+
 // ── Step 3 (Monitoring): Recurring Jobs ────────────────────────────────────
 
 /** How often a recurring job fires. */
@@ -2676,6 +2749,60 @@ export class GenClient {
     return this.agentCoreRequest<{ ok: boolean; removed: boolean }>(
       "DELETE",
       `/agents/${encodeURIComponent(agentId)}/watchlists/${encodeURIComponent(watchlistId)}/sources?${query}`
+    );
+  }
+
+  /**
+   * List Proof of Genesis / Backup to Blockchain rows for an agent. Removed
+   * rows are hidden by default. Phase: Step 4 (Assets).
+   */
+  async listProofOfGenesisBackups(
+    agentId: string,
+    options: { includeRemoved?: boolean } = {}
+  ): Promise<{ backups: ProofOfGenesisBackup[] }> {
+    const query = new URLSearchParams();
+    if (options.includeRemoved !== undefined) {
+      query.set("include_removed", String(options.includeRemoved));
+    }
+    const suffix = query.toString() ? `?${query.toString()}` : "";
+    return this.agentCoreRequest<{ backups: ProofOfGenesisBackup[] }>(
+      "GET",
+      `/agents/${encodeURIComponent(agentId)}/proof-of-genesis/backups${suffix}`
+    );
+  }
+
+  /**
+   * Manually back up a GEN image or video asset to Walrus, or record an
+   * automatic asset event. Auto-backup defaults to downloaded/published
+   * assets. Public assets may be uploaded raw. Private assets must be
+   * encrypted before upload because Walrus blobs are public by default.
+   * Storage is monthly by default and response rows include expiry/renewal
+   * metadata.
+   * Phase: Step 4 (Assets).
+   */
+  async createProofOfGenesisBackup(
+    agentId: string,
+    params: CreateProofOfGenesisBackupParams
+  ): Promise<ProofOfGenesisBackup> {
+    return this.agentCoreRequest<ProofOfGenesisBackup>(
+      "POST",
+      `/agents/${encodeURIComponent(agentId)}/proof-of-genesis/backups`,
+      params
+    );
+  }
+
+  /**
+   * Soft-remove a Proof of Genesis row from the default asset view. This sets
+   * removed_at in GEN; it does not guarantee deletion from Walrus or Sui.
+   * Phase: Step 4 (Assets).
+   */
+  async removeProofOfGenesisBackup(
+    agentId: string,
+    backupId: number
+  ): Promise<ProofOfGenesisBackup> {
+    return this.agentCoreRequest<ProofOfGenesisBackup>(
+      "DELETE",
+      `/agents/${encodeURIComponent(agentId)}/proof-of-genesis/backups/${encodeURIComponent(String(backupId))}`
     );
   }
 
