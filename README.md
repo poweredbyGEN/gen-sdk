@@ -143,6 +143,7 @@ const { samples } = await sdk.setup.generateVoiceSamples(String(agent.id), {
 const voice = await sdk.setup.finalizeDesignedVoice(String(agent.id), {
   generation_id: samples[0].generation_id,
   name: "Primary voice",
+  voice_model_provider: "supertonic_3", // default; use "qwen3_voice_design" for Qwen
 });
 ```
 
