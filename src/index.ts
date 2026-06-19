@@ -593,6 +593,8 @@ export type VoiceSource =
   | "user_trained"
   | "user_elevenlabs";
 
+export type VoiceModelProvider = "supertonic_3" | "qwen3_voice_design";
+
 export interface InspirationItem {
   id?: number;
   url: string;
@@ -705,6 +707,7 @@ export interface UserVoiceResource {
   description?: string | null;
   hume_ai_voice_id?: string | null;
   file_url?: string | null;
+  provider?: VoiceModelProvider | string | null;
 }
 
 export interface UserJob {
@@ -2011,6 +2014,7 @@ export class GenClient {
       name: string;
       gender?: string;
       language?: string;
+      voice_model_provider?: VoiceModelProvider;
       description?: string;
     }
   ): Promise<UserVoiceResource> {
@@ -2030,6 +2034,7 @@ export class GenClient {
       audio_base64?: string;
       gender?: string;
       language?: string;
+      voice_model_provider?: VoiceModelProvider;
       description?: string;
     }
   ): Promise<UserVoiceResource> {
