@@ -275,15 +275,19 @@ const SIMPLE_TYPE_MAP: Record<string, string> = {
 };
 
 const MODEL_ROUTED_TYPE_MAP: Record<string, (model: string) => string> = {
-  image_from_text: (model) =>
-    model === "midjourney" ? "midjourney" : "gemini_image_generation",
+  image_from_text: (model) => {
+    if (model === "grok") return "grok_image_generation";
+    return model === "midjourney" ? "midjourney" : "gemini_image_generation";
+  },
   video_from_text: (model) => {
+    if (model === "grok") return "grok_video_generation";
     if (model.startsWith("sora")) return "sora2_video_generation";
     if (model.startsWith("kling")) return "kling";
     if (model.startsWith("seedance")) return "seedance_video_generation";
     return "gemini_video_generation";
   },
   video_from_image: (model) => {
+    if (model === "grok") return "grok_video_generation";
     if (model.startsWith("kling")) return "kling_image_video";
     if (model.startsWith("sora")) return "sora2_video_generation";
     if (model.startsWith("seedance")) return "seedance_video_generation";
