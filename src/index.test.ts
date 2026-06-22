@@ -452,6 +452,18 @@ describe("GenClient", () => {
       );
     });
 
+    it("should resolve 'image_from_text' to 'grok_image_generation' for grok model", async () => {
+      const fetchFn = mockFetch(201, { generation_id: "gen-1", status: "pending" });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.generateContent("agent-1", "eng-1", "cell-1", "image_from_text", { prompt: "cat", model: "grok" });
+      expect(fetchFn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('"generation_type":"grok_image_generation"'),
+        })
+      );
+    });
+
     it("should resolve 'video_from_text' to 'kling' for kling models", async () => {
       const fetchFn = mockFetch(201, { generation_id: "gen-1", status: "pending" });
       const client = new GenClient({ apiKey: "key", fetch: fetchFn });
@@ -460,6 +472,34 @@ describe("GenClient", () => {
         expect.any(String),
         expect.objectContaining({
           body: expect.stringContaining('"generation_type":"kling"'),
+        })
+      );
+    });
+
+    it("should resolve 'video_from_text' to 'grok_video_generation' for grok model", async () => {
+      const fetchFn = mockFetch(201, { generation_id: "gen-1", status: "pending" });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.generateContent("agent-1", "eng-1", "cell-1", "video_from_text", { prompt: "dance", model: "grok" });
+      expect(fetchFn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('"generation_type":"grok_video_generation"'),
+        })
+      );
+    });
+
+    it("should resolve 'video_from_image' to 'grok_video_generation' for grok model", async () => {
+      const fetchFn = mockFetch(201, { generation_id: "gen-1", status: "pending" });
+      const client = new GenClient({ apiKey: "key", fetch: fetchFn });
+      await client.generateContent("agent-1", "eng-1", "cell-1", "video_from_image", {
+        prompt: "animate",
+        model: "grok",
+        image_resource_id: 123,
+      });
+      expect(fetchFn).toHaveBeenCalledWith(
+        expect.any(String),
+        expect.objectContaining({
+          body: expect.stringContaining('"generation_type":"grok_video_generation"'),
         })
       );
     });
